@@ -104,7 +104,9 @@ Open your web browser and navigate to:
 - **Main application:** http://127.0.0.1:8000/
 - **Admin interface:** http://127.0.0.1:8000/admin/
 
-Log in to the admin interface using the superuser credentials you created in step 6.
+You should see a welcome message on the main page. Log in to the admin interface using the superuser credentials you created in step 6.
+
+**Note:** The project includes a sample `core` app with a basic view and test to demonstrate the Django setup is working correctly.
 
 ## Common Django Commands
 
@@ -147,8 +149,17 @@ AutoPhone/
 │   ├── urls.py             # URL routing
 │   ├── wsgi.py             # WSGI configuration
 │   └── asgi.py             # ASGI configuration
+├── core/                   # Sample Django app
+│   ├── __init__.py
+│   ├── admin.py
+│   ├── apps.py
+│   ├── models.py
+│   ├── tests.py            # Sample tests
+│   ├── views.py            # Sample views
+│   └── migrations/
 ├── manage.py               # Django management script
 ├── requirements.txt        # Python dependencies
+├── QUICKSTART.md           # This guide
 └── db.sqlite3             # SQLite database (created after migrations)
 ```
 
