@@ -1,0 +1,14 @@
+{
+  "phone_number": "1-800-480-3287",
+  "start_minute": 58,
+  "end_minute": 2,
+  "delay_between_attempts": 7,
+  "max_attempts": 40,
+  "call_observation_delay": 8,
+  "schedule_mode": "every_hour",
+  "active_hours": [],
+  "phone_link_title": "Phone Link",
+  "dial_pad_shortcut": ["ctrl", "shift", "d"],
+  "call_button_shortcut": ["enter"],
+  "hangup_shortcut": ["esc"]
+}
