@@ -10,5 +10,6 @@
   "phone_link_title": "Phone Link",
   "dial_pad_shortcut": ["ctrl", "shift", "d"],
   "call_button_shortcut": ["enter"],
-  "hangup_shortcut": ["esc"]
+  "hangup_shortcut": ["esc"],
+  "number_field_click": null
 }

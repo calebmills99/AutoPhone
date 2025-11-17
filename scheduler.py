@@ -14,8 +14,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 import logging
-import time
 from typing import Iterable, Optional
+
+from utils import sleep_with_stop
 
 
 @dataclass
@@ -28,9 +29,9 @@ class BurstWindow:
     def contains(self, minute: int) -> bool:
         """Return ``True`` if ``minute`` is inside the burst window."""
 
-        minute = int(minute) % 60
-        start = int(self.start_minute) % 60
-        end = int(self.end_minute) % 60
+        minute %= 60
+        start = self.start_minute % 60
+        end = self.end_minute % 60
 
         if start == end:
             # Whole hour is considered active.
@@ -64,7 +65,7 @@ class BurstScheduler:
     ) -> None:
         self.window = BurstWindow(start_minute, end_minute)
         self.schedule_mode = (schedule_mode or "every_hour").lower()
-        self.active_hours = set(int(h) for h in (active_hours or []))
+        self.active_hours = {int(h) for h in (active_hours or [])}
 
     # ------------------------------------------------------------------
     # public helpers
@@ -81,10 +82,10 @@ class BurstScheduler:
 
             sleep_for = self._seconds_until_next_window(now)
             logging.debug("Next burst window in %.1f seconds", sleep_for)
-            self._sleep_with_stop(sleep_for, stop_event)
+            sleep_with_stop(sleep_for, stop_event)
 
     def sleep_between_attempts(self, delay_seconds: float, stop_event=None) -> None:
-        self._sleep_with_stop(max(delay_seconds, 0.1), stop_event)
+        sleep_with_stop(max(delay_seconds, 0.1), stop_event)
 
     # ------------------------------------------------------------------
     # internals
@@ -92,27 +93,15 @@ class BurstScheduler:
     def _hour_is_active(self, ts: datetime) -> bool:
         if self.schedule_mode != "specific_hours":
             return True
-        if not self.active_hours:
-            # Fail safe – treat as always on.
-            return True
-        return ts.hour in self.active_hours
+        return True if not self.active_hours else ts.hour in self.active_hours
 
     def _seconds_until_next_window(self, now: datetime) -> float:
         candidate = now.replace(second=0, microsecond=0)
         # Search up to two days ahead which covers every possible combination.
-        for minutes_ahead in range(1, 60 * 24 * 2):
+        for _ in range(1, 60 * 24 * 2):
             candidate += timedelta(minutes=1)
             if self._hour_is_active(candidate) and self.window.contains(candidate.minute):
                 delta = candidate - now
                 return max(delta.total_seconds(), 1.0)
         # Should never happen but keeps us safe.
         return 60.0
-
-    @staticmethod
-    def _sleep_with_stop(seconds: float, stop_event=None) -> None:
-        seconds = max(seconds, 0)
-        end_time = time.time() + seconds
-        while time.time() < end_time:
-            if stop_event and stop_event.is_set():
-                return
-            time.sleep(min(0.5, max(0, end_time - time.time())))

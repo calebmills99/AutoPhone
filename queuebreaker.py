@@ -31,6 +31,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "schedule_mode": "every_hour",
     "active_hours": [],
     "phone_link_title": "Phone Link",
+    "number_field_click": None,
 }
 
 
@@ -41,7 +42,7 @@ def load_settings() -> Dict[str, Any]:
         return dict(DEFAULT_SETTINGS)
     user_settings = json.loads(SETTINGS_PATH.read_text())
     merged = dict(DEFAULT_SETTINGS)
-    merged.update(user_settings)
+    merged |= user_settings
     return merged
 
 
@@ -69,7 +70,7 @@ def register_hotkey(stop_event: threading.Event) -> None:
 def append_attempt_log(attempt_no: int, result) -> None:
     ATTEMPT_LOG.parent.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    window_state = result.window_state if result.window_state else "n/a"
+    window_state = result.window_state or "n/a"
     line = (
         f"{timestamp} | Attempt {attempt_no:03d} | Duration {result.duration_seconds:.1f}s | "
         f"Termination {result.termination_reason} | Window {window_state}\n"

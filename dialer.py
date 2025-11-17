@@ -7,6 +7,8 @@ import logging
 import time
 from typing import Optional
 
+from utils import sleep_with_stop
+
 try:  # pragma: no cover - optional dependency in CI
     import pyautogui as pag
     pag.FAILSAFE = False
@@ -44,6 +46,7 @@ class Dialer:
             "call_button_shortcut", ["enter"]
         )
         self.hangup_shortcut = settings.get("hangup_shortcut", ["esc"])
+        self.number_field_click = settings.get("number_field_click")
         self._app: Optional[Application] = None
         self._warn_if_missing_dependencies()
 
@@ -56,7 +59,7 @@ class Dialer:
         self.open_dial_pad()
         self.enter_phone_number(phone_number)
         self.trigger_call()
-        self._sleep_with_stop(observation_delay, stop_event)
+        sleep_with_stop(observation_delay, stop_event)
         termination_reason = "unknown"
         try:
             termination_reason = self.detect_call_outcome()
@@ -85,66 +88,64 @@ class Dialer:
 
         if pag is None:
             raise RuntimeError(
-                "PyAutoGUI is required to focus Phone Link. Original import error: %s"
-                % _PYAUTOGUI_ERROR
+                f"PyAutoGUI is required to focus Phone Link. Original import error: {_PYAUTOGUI_ERROR}"
             )
 
         # Fallback: Windows Search -> Phone Link.
-        pag.hotkey("win")
+        pag.hotkey("win", "s")
         time.sleep(0.4)
         pag.write(self.phone_link_title)
         pag.press("enter")
+        time.sleep(1)
         logging.debug("Focused Phone Link using Windows Search")
+        if Application is not None and self._app is None:
+            try:
+                self._app = Application(backend="uia").connect(
+                    title_re=self.phone_link_title
+                )
+            except Exception as exc:  # pragma: no cover - Windows only
+                logging.debug("pywinauto reconnect after search failed: %s", exc)
 
     def open_dial_pad(self) -> None:
         if pag is None:
             return
         time.sleep(0.3)
-        self._send_shortcut(self.dial_pad_shortcut)
+        pag.hotkey(*self.dial_pad_shortcut)
         time.sleep(0.3)
 
     def enter_phone_number(self, phone_number: str) -> None:
         if pag is None:
             return
+        self._focus_number_field()
         pag.hotkey("ctrl", "a")
         pag.press("backspace")
         pag.write(phone_number, interval=0.05)
         logging.debug("Entered phone number %s", phone_number)
 
     def trigger_call(self) -> None:
-        if Application is not None and self._app is not None:
-            try:
-                window = self._app.top_window()
-                call_button = window.child_window(title_re=".*call.*", control_type="Button")
-                call_button.click_input()
-                logging.debug("Clicked Call button via pywinauto")
-                return
-            except Exception as exc:  # pragma: no cover - Windows only
-                logging.debug("pywinauto call button fallback: %s", exc)
+        def _uia():
+            window = self._app.top_window()
+            call_button = window.child_window(title_re=".*call.*", control_type="Button")
+            call_button.click_input()
 
-        if pag is None:
-            raise RuntimeError(
-                "PyAutoGUI is required for keyboard automation. Import error: %s"
-                % _PYAUTOGUI_ERROR
-            )
-        self._send_shortcut(self.call_button_shortcut)
-        logging.debug("Triggered call via keyboard shortcut")
+        self._do_with_fallback(
+            "trigger_call",
+            ui_action=_uia if Application is not None and self._app is not None else None,
+            pag_action=(lambda: pag.hotkey(*self.call_button_shortcut)) if pag is not None else None,
+        )
 
     def hang_up(self) -> None:
-        if Application is not None and self._app is not None:
-            try:
-                window = self._app.top_window()
-                hangup_button = window.child_window(title_re=".*hang.*|.*end.*", control_type="Button")
-                hangup_button.click_input()
-                logging.debug("Clicked Hang Up button via pywinauto")
-                return
-            except Exception as exc:  # pragma: no cover - Windows only
-                logging.debug("pywinauto hang-up fallback: %s", exc)
+        def _uia():
+            window = self._app.top_window()
+            hangup_button = window.child_window(title_re=".*hang.*|.*end.*", control_type="Button")
+            hangup_button.click_input()
 
-        if pag is None:
-            return
-        self._send_shortcut(self.hangup_shortcut)
-        logging.debug("Sent hang-up shortcut")
+        self._do_with_fallback(
+            "hang_up",
+            ui_action=_uia if Application is not None and self._app is not None else None,
+            pag_action=(lambda: pag.hotkey(*self.hangup_shortcut)) if pag is not None else None,
+            require_pag=False,
+        )
 
     def detect_call_outcome(self) -> str:
         """Placeholder for future OCR/IVR detection."""
@@ -173,23 +174,49 @@ class Dialer:
         if Application is None:
             logging.debug("pywinauto not available: %s", _PYWINAUTO_ERROR)
 
-    @staticmethod
-    def _sleep_with_stop(seconds: float, stop_event=None) -> None:
-        seconds = max(seconds, 0)
-        end_time = time.time() + seconds
-        while time.time() < end_time:
-            if stop_event and stop_event.is_set():
-                break
-            time.sleep(min(0.5, max(0, end_time - time.time())))
+    def _focus_number_field(self) -> bool:
+        if Application is not None and self._app is not None:
+            try:
+                window = self._app.top_window()
+                edit = window.child_window(control_type="Edit")
+                edit.click_input()
+                logging.debug("Focused number field via pywinauto")
+                return True
+            except Exception as exc:  # pragma: no cover - Windows only
+                logging.debug("pywinauto number field fallback: %s", exc)
 
-    @staticmethod
-    def _send_shortcut(keys) -> None:
+        if pag is not None and self.number_field_click:
+            try:
+                x, y = self.number_field_click
+                pag.click(x, y)
+                logging.debug("Focused number field via configured coordinates")
+                return True
+            except Exception as exc:  # pragma: no cover - depends on host input
+                logging.debug("Coordinate click for number field failed: %s", exc)
+        return False
+
+    def _do_with_fallback(self, label: str, ui_action=None, pag_action=None, require_pag: bool = True) -> None:
+        if Application is not None and self._app is not None and ui_action is not None:
+            try:
+                ui_action()
+                logging.debug("%s via pywinauto", label)
+                return
+            except Exception as exc:  # pragma: no cover - Windows only
+                logging.debug("pywinauto %s failed: %s", label, exc)
+
+        if pag_action is None:
+            if require_pag and pag is None:
+                raise RuntimeError(
+                    f"PyAutoGUI is required for {label}. Import error: {_PYAUTOGUI_ERROR}"
+                )
+            return
+
         if pag is None:
+            if require_pag:
+                raise RuntimeError(
+                    f"PyAutoGUI is required for {label}. Import error: {_PYAUTOGUI_ERROR}"
+                )
             return
-        keys = list(keys or [])
-        if not keys:
-            return
-        for key in keys:
-            pag.keyDown(key)
-        for key in reversed(keys):
-            pag.keyUp(key)
+
+        pag_action()
+        logging.debug("%s via PyAutoGUI", label)
