@@ -7,3 +7,5 @@ SoundFile
 pipwin
 scipy
 PyYAML
+pywinauto
+keyboard
