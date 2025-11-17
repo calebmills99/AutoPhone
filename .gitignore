@@ -1,1 +1,29 @@
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.log
+
+# Django specific
+db.sqlite3
+db.sqlite3-journal
+*.sqlite3
+/media
+/staticfiles
+.env
+.venv
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

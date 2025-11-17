@@ -5,6 +5,8 @@ EDD customer support line (or any configured number) from an Android phone.
 It is tailored for burst dialing during the final minutes of every hour so you
 can pierce the EDD queue while it resets.
 
+**📚 New to Django?** Check out the [Django Quick Start Guide](QUICKSTART.md) for step-by-step instructions on setting up the Django project.
+
 ## Features
 
 - **Burst windows** – dial between a configurable start/end minute (default
